@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AOC-4 Filing Assistant — AIJGF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  /* ── LIGHT THEME (only colors changed from original) ── */
+  :root {
+    --bg: #f0f4f8;
+    --surface: #ffffff;
+    --border: #d1dbe8;
+    --accent: #1e40af;
+    --accent2: #047857;
+    --warn: #b45309;
+    --text: #0f172a;
+    --muted: #64748b;
+    --green: #047857;
+    --red: #b91c1c;
+    --section-header: #e8eef6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600; font-size: 11px;
+    color: white;
+  }
+  .header h1 { font-size: 15px; font-weight: 600; color: var(--text); }
+  .header p { font-size: 11px; color: var(--muted); }
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; padding: 3px 8px;
+    border-radius: 4px; border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+  }
+  .badge.connected { border-color: var(--green); color: var(--green); background: #f0fdf4; }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    margin: 24px 20px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(30,64,175,0.03);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-zone h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  .upload-zone p { color: var(--muted); font-size: 12px; }
+  .upload-zone .hint { color: var(--accent); font-size: 11px; margin-top: 8px; }
+
+  /* ── SEARCH ── */
+  .toolbar {
+    margin: 0 20px 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .search-box {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px 8px 34px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    font-family: 'IBM Plex Sans', sans-serif;
+    position: relative;
+  }
+  .search-wrap { position: relative; flex: 1; }
+  .search-wrap::before {
+    content: '⌕';
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 16px;
+    pointer-events: none;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(30,64,175,0.05);
+  }
+  .progress-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .progress-summary span { color: var(--accent); font-weight: 700; }
+
+  /* ── SECTIONS ── */
+  .sections { padding: 0 20px 40px; }
+  .section { margin-bottom: 8px; }
+  .section-header {
+    background: var(--section-header);
+    border: 1px solid var(--border);
+    border-radius: 8px 8px 0 0;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-header:hover { background: #dce6f0; }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .section-meta { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+  .section-body {
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .section.collapsed .section-body { display: none; }
+  .section-header .chevron { transition: transform 0.2s; color: var(--muted); }
+  .section.collapsed .section-header .chevron { transform: rotate(-90deg); }
+
+  /* ── ROWS ── */
+  .field-row {
+    display: grid;
+    grid-template-columns: 28px 1fr 130px 130px 80px;
+    align-items: center;
+    min-height: 34px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    transition: background 0.12s;
+    position: relative;
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-row:hover {
+    background: #dbeafe;
+    z-index: 2;
+  }
+  .field-row:hover .field-label {
+    font-weight: 700;
+    color: #1e3a8a;
+  }
+  .field-row:hover .row-num {
+    color: #1e3a8a;
+    font-weight: 700;
+  }
+  .field-row.no-data { opacity: 0.45; }
+  .field-row.highlighted { background: rgba(30,64,175,0.04); }
+
+  .row-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .field-label {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.4;
+    font-weight: 500;
+  }
+  .field-label .sub { color: var(--muted); font-size: 11px; display: block; margin-top: 1px; }
+
+  .value-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+  .value-display {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1e3a8a;
+    background: #eef3fb;
+    border: 1px solid #c3d4ed;
+    border-radius: 5px;
+    padding: 4px 8px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Hover: show full value via tooltip popup */
+  .value-cell:hover .value-display {
+    overflow: visible;
+    white-space: normal;
+    word-break: break-all;
+  }
+  .value-cell:hover .value-display:not(.dash) {
+    font-size: 14px;
+    background: #1e3a8a;
+    color: #fff;
+    border-color: #1e3a8a;
+    padding: 6px 12px;
+    border-radius: 8px;
+    position: absolute;
+    left: 0;
+    top: -38px;
+    min-width: 140px;
+    max-width: 280px;
+    box-shadow: 0 4px 16px rgba(30,64,175,0.25);
+    z-index: 100;
+    white-space: nowrap;
+    overflow: visible;
+  }
+  .value-display.dash { color: var(--muted); background: #f8fafc; }
+  .value-display.negative { color: var(--red); }
+  .value-display.negative:not(.dash) { color: #fff; background: #b91c1c; border-color: #b91c1c; }
+  .value-display.text-val { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; color: #1e3a8a; }
+
+  .copy-btn {
+    background: white;
+    border: 1px solid #c3d4ed;
+    border-radius: 5px;
+    padding: 4px 8px;
+    color: #1e3a8a;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: white; background: var(--accent); }
+  .copy-btn.copied { border-color: var(--green); color: white; background: var(--green); }
+
+  .col-header {
+    display: grid;
+    grid-template-columns: 28px 1fr 130px 130px 80px;
+    padding: 6px 10px;
+    gap: 8px;
+    background: #eef3fb;
+    border-bottom: 1px solid var(--border);
+  }
+  .col-header span {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .col-header span:nth-child(3) { text-align: center; }
+  .col-header span:nth-child(4) { text-align: center; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: #1e3a8a;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s;
+    pointer-events: none;
+    z-index: 999;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── PLACEHOLDER ── */
+  .placeholder {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .placeholder h3 { font-size: 16px; color: var(--text); margin-bottom: 8px; }
+  .placeholder p { font-size: 13px; }
+
+  /* ── SUBROW (indented items) ── */
+  .field-row.indent1 .field-label { padding-left: 14px; }
+  .field-row.indent2 .field-label { padding-left: 28px; }
+
+  /* Section group dividers */
+  .group-label {
+    padding: 8px 10px 4px 38px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #b45309;
+    background: rgba(180,83,9,0.05);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .field-row { grid-template-columns: 22px 1fr 100px; }
+    .field-row > *:nth-child(5) { display: none; }
+    .col-header { grid-template-columns: 22px 1fr 100px; }
+    .col-header > *:nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">AOC</div>
+    <div>
+      <h1>AOC-4 Filing Assistant</h1>
+      <p>All India Jewellers &amp; Goldsmith Federation — FY 2024-25</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <div class="badge" id="fileBadge">No file loaded</div>
+    <div class="badge" style="border-color:#1e40af;color:#1e40af;background:#eff6ff">Form AOC-4</div>
+  </div>
+</div>
+
+<!-- UPLOAD -->
+<div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+  <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(this.files[0])">
+  <div class="upload-icon">📂</div>
+  <h3>Drop your Excel Financial Statement here</h3>
+  <p>Supports .xlsx / .xls — Trial Balance, BS, or P&amp;L sheets</p>
+  <div class="hint">↓ Or click to browse file</div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar" id="toolbar" style="display:none">
+  <div class="search-wrap">
+    <input class="search-box" id="searchBox" type="text" placeholder="Search fields… e.g. share capital, cash, revenue" oninput="filterRows()">
+  </div>
+  <button class="filter-btn active" id="filterAll" onclick="setFilter('all')">All</button>
+  <button class="filter-btn" id="filterFilled" onclick="setFilter('filled')">Has Data</button>
+  <button class="filter-btn" id="filterEmpty" onclick="setFilter('empty')">Missing</button>
+  <div class="progress-summary" id="progressSummary"></div>
+</div>
+
+<!-- SECTIONS -->
+<div class="sections" id="sections">
+  <div class="placeholder">
+    <h3>Ready to load your Excel file</h3>
+    <p>Upload the AIJGF financials file above. All fields will be mapped to the AOC-4 form order with one-click copy.</p>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">✓ Copied to clipboard</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────
+let parsedData = {};
+let currentFilter = 'all';
+let activeSearch = '';
+
+// ─── DRAG & DROP ─────────────────────────────────────────
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+// ─── FILE PARSE ───────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      parsedData = extractData(wb);
+      document.getElementById('fileBadge').textContent = file.name;
+      document.getElementById('fileBadge').className = 'badge connected';
+      document.getElementById('uploadZone').style.display = 'none';
+      document.getElementById('toolbar').style.display = 'flex';
+      renderAll();
+    } catch(err) {
+      alert('Could not read file. Please ensure it is a valid .xlsx file.\n' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── DATA EXTRACTION ──────────────────────────────────────
+function extractData(wb) {
+  const d = {};
+
+  function getSheet(name) {
+    if (!wb.SheetNames.includes(name)) return [];
+    const ws = wb.Sheets[name];
+    return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  }
+
+  function findVal(rows, keyword, col = null, closingCol = null) {
+    const kw = keyword.toLowerCase();
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      for (let j = 0; j < row.length; j++) {
+        const cell = String(row[j] || '').toLowerCase();
+        if (cell.includes(kw)) {
+          if (closingCol !== null && row[closingCol] !== null && row[closingCol] !== undefined && row[closingCol] !== '') return row[closingCol];
+          if (col !== null && row[col] !== null && row[col] !== undefined && row[col] !== '') return row[col];
+          for (let k = j + 1; k < row.length; k++) {
+            if (typeof row[k] === 'number') return row[k];
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  const trialSheetNames = ['Trial 23-24', 'trial', 'Trial Balance', 'Trial'];
+  let trialRows = [];
+  for (const n of trialSheetNames) {
+    const r = getSheet(n);
+    if (r.length > 5) { trialRows = r; break; }
+  }
+
+  const trialMap = {};
+  for (const row of trialRows) {
+    if (!row[0] || typeof row[0] !== 'string') continue;
+    const key = row[0].trim().toLowerCase();
+    let val = null;
+    for (let k = row.length - 1; k >= 1; k--) {
+      if (typeof row[k] === 'number') { val = row[k]; break; }
+    }
+    if (val !== null) trialMap[key] = val;
+  }
+
+  const bsRows = getSheet('BS 24-25');
+  const plRows = getSheet('Profit And Loss');
+  const notesRows = getSheet('Notes 9to15');
+  const notes2Rows = getSheet("Note 2, 3 ");
+  const notes48Rows = getSheet("Note  4,5,6,7,8");
+  const notesPLRows = getSheet("Notes 16 to 20 Profit & Loss");
+
+  d.shareCapital = trialMap['capital a/c'] || trialMap['capital account'] || findVal(notes2Rows, 'share capital', 3) || 100000;
+  const plAcOpening = trialMap["profit & loss a/c"] || trialMap["p & l a/c"] || 211079.44;
+  d.reservesSurplus = Math.round(plAcOpening);
+
+  d.longTermBorrowings = 0;
+  d.deferredTaxLiab = 0;
+  d.otherLongTermLiab = 0;
+  d.longTermProvisions = 0;
+  d.shortTermBorrowings = 0;
+  d.tradePayablesMSME = 0;
+  d.tradePayablesOthers = trialMap['sundry creditors'] || findVal(notes48Rows, 'sundry creditor', 4) || 0;
+  d.otherCurrentLiab = 0;
+
+  const auditFeePayable = trialMap['audit fees payable'] || 0;
+  const salaryPayable = trialMap['salary payable'] || 0;
+  d.shortTermProvisions = Math.round(auditFeePayable + salaryPayable);
+
+  d.ppe = 0;
+  d.intangibleAssets = 0;
+  d.capitalWIP = 0;
+  d.intangibleUnderDev = 0;
+  d.nonCurrentInvestments = 0;
+  d.deferredTaxAssets = 0;
+  d.longTermLoans = 0;
+  d.otherNonCurrentAssets = 0;
+  d.currentInvestments = 0;
+  d.inventories = 0;
+  d.tradeReceivables = 0;
+
+  const bankBal = trialMap['induslnd bank 5195'] || trialMap['bank accounts'] || 0;
+  const fd3172 = trialMap['fd 3172'] || 0;
+  const fd3556 = trialMap['fd 3556'] || 0;
+  const fd4836 = trialMap['fd 4836'] || 0;
+  const fd6927 = trialMap['fd 6927'] || 0;
+  const fd8911 = trialMap['fd 8911'] || 0;
+  const totalFD = fd3172 + fd3556 + fd4836 + fd6927 + fd8911;
+  d.cashEquivalents = Math.round(bankBal + totalFD);
+  d.fdBreakdown = { fd3172, fd3556, fd4836, fd6927, fd8911, bankBal };
+
+  d.shortTermLoans = Math.round(trialMap['tds receivable'] || 0);
+  d.otherCurrentAssets = 0;
+
+  const sponsorship = trialMap['income from sponsorship'] || 0;
+  const contribution = trialMap['contribution'] || 0;
+  d.revenueFromOps = Math.round(sponsorship + contribution);
+  d.revenueBreakdown = { sponsorship, contribution };
+
+  const fdInterest = trialMap['fd interest'] || 0;
+  const otherIncome = trialMap['other income'] || 0;
+  d.otherIncome = Math.round(fdInterest + otherIncome);
+  d.totalIncome = d.revenueFromOps + d.otherIncome;
+
+  d.costOfMaterials = 0;
+  d.purchasesStockTrade = 0;
+  d.changesInventory = 0;
+
+  const staffWelfare = trialMap['staff welfare expenses'] || 0;
+  d.employeeBenefits = Math.round(staffWelfare);
+  d.managerialRemuneration = 0;
+  d.auditorsPayment = Math.round(trialMap['audit fee'] || 0);
+  d.insurance = 0;
+  d.powerFuel = Math.round(trialMap['electricity expense'] || 0);
+  d.financeCost = Math.round(trialMap['bank charges'] || 0);
+  d.depreciation = 0;
+
+  const accounting = trialMap['accounting charges'] || 0;
+  const office = trialMap['office expense'] || 0;
+  const otherExp = trialMap['other expense'] || 0;
+  const professional = trialMap['profesionals charges'] || 0;
+  const socialMedia = trialMap['social media expense'] || 0;
+  const software = trialMap['software charges'] || 0;
+  const telephone = trialMap['telephone charges'] || 0;
+  const travelling = trialMap['travelling expense'] || 0;
+  const hotel = trialMap['hotel expenses'] || 0;
+  d.otherExpenses = Math.round(accounting + office + otherExp + professional + socialMedia + software + telephone + travelling + hotel + staffWelfare);
+
+  d.totalExpenses = d.employeeBenefits + d.auditorsPayment + d.powerFuel + d.financeCost + d.depreciation + d.otherExpenses;
+  d.profitBeforeTax = d.totalIncome - d.totalExpenses;
+  d.exceptionalItems = 0;
+  d.profitBeforeExtraordinary = d.profitBeforeTax;
+  d.extraordinaryItems = 0;
+  d.profitBeforeAllTax = d.profitBeforeTax;
+  d.currentTax = 0;
+  d.deferredTax = 0;
+  d.profitLossContinuing = d.profitBeforeTax;
+  d.profitLossDiscontinuing = 0;
+  d.taxDiscontinuing = 0;
+  d.profitDiscontinuingAfterTax = 0;
+  d.profitLoss = d.profitBeforeTax;
+
+  const shares = 10000;
+  d.epsBasic = d.profitLoss / shares;
+  d.epsDiluted = d.profitLoss / shares;
+
+  d.reservesSurplus = Math.round(plAcOpening + d.profitLoss);
+  d.netWorth = d.shareCapital + d.reservesSurplus;
+  d.totalEquityLiab = d.shareCapital + d.reservesSurplus + d.tradePayablesOthers + d.shortTermProvisions;
+  d.totalAssets = d.cashEquivalents + d.shortTermLoans;
+  d.netWorthParam = d.netWorth;
+  d.expBreakdown = { accounting, hotel, socialMedia, professional, office, otherExp, software, telephone, travelling, staffWelfare };
+
+  return d;
+}
+
+// ─── FORMAT VALUE ─────────────────────────────────────────
+function fmt(val) {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') {
+    if (val === 0) return '0';
+    return val.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
+  return String(val);
+}
+
+function isDash(val) {
+  return val === null || val === undefined || val === '';
+}
+
+// ─── COPY ─────────────────────────────────────────────────
+function copyVal(val, btn) {
+  const text = (val === null || val === undefined || val === '') ? '' : String(typeof val === 'number' ? Math.round(val) : val);
+  
+  const tryClipboard = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '✓ Done';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      showToast(`Copied: ${text || '—'}`);
+    }).catch(fallback);
+  };
+
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    btn.textContent = '✓ Done';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    showToast(`Copied: ${text || '—'}`);
+  };
+
+  try { tryClipboard(); } catch(e) { fallback(); }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ─── FILTER ───────────────────────────────────────────────
+function setFilter(f) {
+  currentFilter = f;
+  ['filterAll','filterFilled','filterEmpty'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('filter' + f.charAt(0).toUpperCase() + f.slice(1)).classList.add('active');
+  applyFilter();
+}
+
+function filterRows() {
+  activeSearch = document.getElementById('searchBox').value.toLowerCase();
+  applyFilter();
+}
+
+function applyFilter() {
+  const rows = document.querySelectorAll('.field-row');
+  let visible = 0, total = 0;
+  rows.forEach(row => {
+    const label = (row.dataset.label || '').toLowerCase();
+    const val = row.dataset.hasval;
+    let show = true;
+    if (currentFilter === 'filled' && val === '0') show = false;
+    if (currentFilter === 'empty' && val === '1') show = false;
+    if (activeSearch && !label.includes(activeSearch)) show = false;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+    if (val !== undefined) total++;
+  });
+  document.getElementById('progressSummary').innerHTML = `<span>${visible}</span> / ${total} shown`;
+}
+
+// ─── BUILD ROW ────────────────────────────────────────────
+let rowCounter = 0;
+function buildRow(label, curVal, prevVal, indent = 0, isGroup = false) {
+  if (isGroup) {
+    return `<div class="group-label">${label}</div>`;
+  }
+  rowCounter++;
+  const cur = fmt(curVal);
+  const prev = fmt(prevVal);
+  const hasCur = !isDash(curVal) && curVal !== 0 && curVal !== '0';
+  const hasPrev = !isDash(prevVal) && prevVal !== 0 && prevVal !== '0';
+  const hasAny = hasCur || hasPrev;
+
+  const curClass = typeof curVal === 'number' && curVal < 0 ? 'negative' : typeof curVal === 'string' ? 'text-val' : '';
+  const prevClass = typeof prevVal === 'number' && prevVal < 0 ? 'negative' : typeof prevVal === 'string' ? 'text-val' : '';
+
+  const curDisplay = isDash(curVal) ? '<span class="value-display dash">—</span>' :
+    `<span class="value-display ${curClass}">${cur}</span>`;
+  const prevDisplay = isDash(prevVal) ? '<span class="value-display dash">—</span>' :
+    `<span class="value-display ${prevClass}">${prev}</span>`;
+
+  const curRaw = typeof curVal === 'number' ? Math.round(curVal) : (curVal || '');
+  const prevRaw = typeof prevVal === 'number' ? Math.round(prevVal) : (prevVal || '');
+
+  return `<div class="field-row indent${indent}${!hasAny ? ' no-data' : ''}"
+    data-label="${label.toLowerCase()}" data-hasval="${hasAny ? 1 : 0}">
+    <span class="row-num">${rowCounter}</span>
+    <span class="field-label">${label}</span>
+    <div class="value-cell">
+      ${curDisplay}
+      ${!isDash(curVal) ? `<button class="copy-btn" onclick="copyVal(${JSON.stringify(curRaw)}, this)">Copy</button>` : ''}
+    </div>
+    <div class="value-cell">
+      ${prevDisplay}
+      ${!isDash(prevVal) ? `<button class="copy-btn" onclick="copyVal(${JSON.stringify(prevRaw)}, this)">Copy</button>` : ''}
+    </div>
+    <span></span>
+  </div>`;
+}
+
+function sectionWrap(id, title, meta, content) {
+  return `<div class="section" id="sec-${id}">
+    <div class="section-header" onclick="document.getElementById('sec-${id}').classList.toggle('collapsed')">
+      <span class="section-title">${title}</span>
+      <div style="display:flex;gap:12px;align-items:center">
+        <span class="section-meta">${meta}</span>
+        <span class="chevron">▾</span>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="col-header">
+        <span>#</span>
+        <span>Field (as per AOC-4)</span>
+        <span style="text-align:center">FY 2024–25 (Current)</span>
+        <span style="text-align:center">FY 2023–24 (Previous)</span>
+        <span></span>
+      </div>
+      ${content}
+    </div>
+  </div>`;
+}
+
+// ─── RENDER ALL ───────────────────────────────────────────
+function renderAll() {
+  const d = parsedData;
+  rowCounter = 0;
+
+  const prev = {
+    shareCapital: 100000,
+    reservesSurplus: 211079,
+    shortTermProvisions: 40000,
+    tradePayablesOthers: 0,
+    cashEquivalents: 346814,
+    shortTermLoans: 4265,
+    revenueServices: 222350,
+    otherNonOpIncome: 40231,
+    totalIncome: 262581,
+    empBenefits: 0,
+    auditFees: 15000,
+    financeCost: 4470,
+    otherExpenses: 676218,
+    totalExpenses: 695688,
+    profitBeforeTax: -433107,
+    profitLoss: -433107,
+    epsBasic: -43.31,
+    epsDiluted: -43.31,
+  };
+
+  // SECTION 1: General Info
+  let s1 = '';
+  s1 += buildRow('Corporate Identity Number (CIN)', 'U85300DL2021NPL384781', null, 0);
+  s1 += buildRow('Authorised Capital', d.shareCapital, null, 0);
+  s1 += buildRow('Name of Company', 'ALL INDIA JEWELLERS AND GOLDSMITH FEDERATION', null, 0);
+  s1 += buildRow('Financial Year From', '01/04/2024', null, 0);
+  s1 += buildRow('Financial Year To', '31/03/2025', null, 0);
+  s1 += buildRow('Type of Industry', 'Commercial & Industrial', null, 0);
+  s1 += buildRow('Net Worth', d.netWorthParam, null, 0);
+
+  // SECTION 2: Balance Sheet — Equity & Liabilities
+  let s2 = '';
+  s2 += buildRow('EQUITY AND LIABILITIES', null, null, 0, true);
+  s2 += buildRow('(1a) Share Capital', d.shareCapital, prev.shareCapital, 1);
+  s2 += buildRow('(1b) Reserves and Surplus', d.reservesSurplus, prev.reservesSurplus, 1);
+  s2 += buildRow('(1c) Money received against share warrants', 0, 0, 1);
+  s2 += buildRow('(2) Share application money pending allotment', 0, 0, 0);
+  s2 += buildRow('NON-CURRENT LIABILITIES', null, null, 0, true);
+  s2 += buildRow('(3a) Long-term borrowings', 0, 0, 1);
+  s2 += buildRow('(3b) Deferred tax liabilities (net)', 0, 0, 1);
+  s2 += buildRow('(3c) Other long-term liabilities', 0, 0, 1);
+  s2 += buildRow('(3d) Long-term provisions', 0, 0, 1);
+  s2 += buildRow('CURRENT LIABILITIES', null, null, 0, true);
+  s2 += buildRow('(4a) Short-term borrowings', 0, 0, 1);
+  s2 += buildRow('(4b-i) Trade payables — MSME', 0, 0, 1);
+  s2 += buildRow('(4b-ii) Trade payables — Others', d.tradePayablesOthers, prev.tradePayablesOthers, 1);
+  s2 += buildRow('(4c) Other current liabilities', 0, 0, 1);
+  s2 += buildRow('(4d) Short-term provisions', d.shortTermProvisions, prev.shortTermProvisions, 1);
+  s2 += buildRow('TOTAL (Equity + Liabilities)', d.totalEquityLiab, null, 0);
+
+  // SECTION 3: Balance Sheet — Assets
+  let s3 = '';
+  s3 += buildRow('NON-CURRENT ASSETS', null, null, 0, true);
+  s3 += buildRow('(1a-i) Property Plant & Equipment', 0, 0, 1);
+  s3 += buildRow('(1a-ii) Intangible Assets', 0, 0, 1);
+  s3 += buildRow('(1a-iii) Capital Work-in-Progress', 0, 0, 1);
+  s3 += buildRow('(1a-iv) Intangible Assets under Development', 0, 0, 1);
+  s3 += buildRow('(1b) Non-current Investments', 0, 0, 1);
+  s3 += buildRow('(1c) Deferred Tax Assets (net)', 0, 0, 1);
+  s3 += buildRow('(1d) Long-term Loans and Advances', 0, 0, 1);
+  s3 += buildRow('(1e) Other Non-current Assets', 0, 0, 1);
+  s3 += buildRow('CURRENT ASSETS', null, null, 0, true);
+  s3 += buildRow('(2a) Current Investments', 0, 0, 1);
+  s3 += buildRow('(2b) Inventories', 0, 0, 1);
+  s3 += buildRow('(2c) Trade Receivables', 0, 0, 1);
+  s3 += buildRow('(2d) Cash and Cash Equivalents', d.cashEquivalents, prev.cashEquivalents, 1);
+  s3 += buildRow('(2e) Short-term Loans and Advances', d.shortTermLoans, prev.shortTermLoans, 1);
+  s3 += buildRow('(2f) Other Current Assets', 0, 0, 1);
+  s3 += buildRow('TOTAL ASSETS', d.totalAssets, null, 0);
+
+  // SECTION 4: P&L
+  let s4 = '';
+  s4 += buildRow('REVENUE FROM OPERATIONS', null, null, 0, true);
+  s4 += buildRow('Domestic — Sale of Goods Manufactured', 0, 0, 1);
+  s4 += buildRow('Domestic — Sale of Goods Traded', 0, 0, 1);
+  s4 += buildRow('Domestic — Sale / Supply of Services', d.revenueFromOps, prev.revenueServices, 1);
+  s4 += buildRow('Export — Sale of Goods Manufactured', 0, 0, 1);
+  s4 += buildRow('Export — Sale of Goods Traded', 0, 0, 1);
+  s4 += buildRow('Export — Sale / Supply of Services', 0, 0, 1);
+  s4 += buildRow('OTHER INCOME', null, null, 0, true);
+  s4 += buildRow('(II-i) Dividend Income', 0, 0, 1);
+  s4 += buildRow('(II-ii) Interest Income', 0, 0, 1);
+  s4 += buildRow('(II-iii) Net Gain / Loss on Sale of Investments', 0, 0, 1);
+  s4 += buildRow('(II-iv) Other Non-Operating Income', d.otherIncome, prev.otherNonOpIncome, 1);
+  s4 += buildRow('(III) TOTAL INCOME (I + II)', d.totalIncome, prev.totalIncome, 0);
+
+  // SECTION 5: Expenses
+  let s5 = '';
+  s5 += buildRow('EXPENSES', null, null, 0, true);
+  s5 += buildRow('(a) Cost of Materials Consumed', 0, 0, 1);
+  s5 += buildRow('(b) Purchases of Stock-in-Trade', 0, 0, 1);
+  s5 += buildRow('(c) Changes in Inventories — Finished Goods', 0, 0, 1);
+  s5 += buildRow('(c) Changes in Inventories — WIP', 0, 0, 1);
+  s5 += buildRow('(c) Changes in Inventories — Stock in Trade', 0, 0, 1);
+  s5 += buildRow('(d) Employee Benefit Expenses', d.employeeBenefits, prev.empBenefits, 1);
+  s5 += buildRow('(e) Managerial Remuneration', 0, 0, 1);
+  s5 += buildRow('(f) Payment to Auditors', d.auditorsPayment, prev.auditFees, 1);
+  s5 += buildRow('(g) Insurance Expenses', 0, 0, 1);
+  s5 += buildRow('(h) Power and Fuel', d.powerFuel, 0, 1);
+  s5 += buildRow('(i) Finance Cost', d.financeCost, prev.financeCost, 1);
+  s5 += buildRow('(j) Depreciation and Amortization', 0, 0, 1);
+  s5 += buildRow('(k) Other Expenses', d.otherExpenses, prev.otherExpenses, 1);
+  s5 += buildRow('TOTAL EXPENSES', d.totalExpenses, prev.totalExpenses, 0);
+
+  // SECTION 6: Profit
+  let s6 = '';
+  s6 += buildRow('(V) Profit before Exceptional & Extraordinary Items & Tax', d.profitBeforeTax, prev.profitBeforeTax, 0);
+  s6 += buildRow('(VI) Exceptional Items', 0, 0, 0);
+  s6 += buildRow('(VII) Profit before Extraordinary Items & Tax (V-VI)', d.profitBeforeTax, prev.profitBeforeTax, 0);
+  s6 += buildRow('(VIII) Extraordinary Items', 0, 0, 0);
+  s6 += buildRow('(IX) Profit before Tax (VII-VIII)', d.profitBeforeTax, prev.profitBeforeTax, 0);
+  s6 += buildRow('(X-i) Current Tax', 0, 0, 1);
+  s6 += buildRow('(X-ii) Deferred Tax', 0, 0, 1);
+  s6 += buildRow('(XI) Profit/(Loss) from Continuing Operations', d.profitLoss, prev.profitLoss, 0);
+  s6 += buildRow('(XII) Profit/(Loss) from Discontinuing Operations', 0, 0, 0);
+  s6 += buildRow('(XIII) Tax Expense of Discontinuing Operations', 0, 0, 0);
+  s6 += buildRow('(XIV) Profit/(Loss) from Disc. Ops after Tax', 0, 0, 0);
+  s6 += buildRow('(XV) Profit / (Loss) for the Period (XI+XIV)', d.profitLoss, prev.profitLoss, 0);
+  s6 += buildRow('(XVI-i) EPS Basic (before extraordinary items)', d.epsBasic, prev.epsBasic, 1);
+  s6 += buildRow('(XVI-ii) EPS Diluted (before extraordinary items)', d.epsDiluted, prev.epsDiluted, 1);
+  s6 += buildRow('(XVII-i) EPS Basic (after extraordinary items)', d.epsBasic, prev.epsBasic, 1);
+  s6 += buildRow('(XVII-ii) EPS Diluted (after extraordinary items)', d.epsDiluted, prev.epsDiluted, 1);
+
+  // SECTION 7: Financial Params BS
+  let s7 = '';
+  s7 += buildRow('Net Worth of the Company', d.netWorthParam, null, 0);
+  s7 += buildRow('Share application money given', 0, null, 0);
+  s7 += buildRow('Secured Loan', 0, null, 0);
+  s7 += buildRow('Gross PPE and Intangible Assets', 0, null, 0);
+  s7 += buildRow('Depreciation and Amortization', 0, null, 0);
+
+  // SECTION 8: Share Capital
+  let s8 = '';
+  s8 += buildRow('EQUITY SHARES', null, null, 0, true);
+  s8 += buildRow('At beginning of year — No. of shares', 10000, null, 0);
+  s8 += buildRow('At beginning of year — Total Nominal Amount', 100000, null, 0);
+  s8 += buildRow('At beginning of year — Total Paid-up Amount', 100000, null, 0);
+  s8 += buildRow('Increase during year — Public Issues', 0, null, 1);
+  s8 += buildRow('Increase during year — Rights Issue', 0, null, 1);
+  s8 += buildRow('Increase during year — Bonus Issue', 0, null, 1);
+  s8 += buildRow('Increase during year — Private Placement', 0, null, 1);
+  s8 += buildRow('At end of year — No. of shares', 10000, null, 0);
+  s8 += buildRow('At end of year — Total Nominal Amount', 100000, null, 0);
+  s8 += buildRow('At end of year — Total Paid-up Amount', 100000, null, 0);
+
+  // SECTION 9: Notes / Breakdowns
+  let s9 = '';
+  s9 += buildRow('CASH & CASH EQUIVALENTS BREAKDOWN', null, null, 0, true);
+  s9 += buildRow('Bank — IndusInd Bank 5195 (Current A/C)', d.fdBreakdown.bankBal, null, 1);
+  s9 += buildRow('FD 3172', d.fdBreakdown.fd3172, null, 1);
+  s9 += buildRow('FD 3556', d.fdBreakdown.fd3556, null, 1);
+  s9 += buildRow('FD 4836', d.fdBreakdown.fd4836, null, 1);
+  s9 += buildRow('FD 6927', d.fdBreakdown.fd6927, null, 1);
+  s9 += buildRow('FD 8911', d.fdBreakdown.fd8911, null, 1);
+  s9 += buildRow('REVENUE BREAKDOWN', null, null, 0, true);
+  s9 += buildRow('Income from Sponsorship', d.revenueBreakdown.sponsorship, null, 1);
+  s9 += buildRow('Contribution', d.revenueBreakdown.contribution, null, 1);
+  s9 += buildRow('EXPENSE NOTES BREAKDOWN', null, null, 0, true);
+  s9 += buildRow('Hotel Expenses', d.expBreakdown.hotel, null, 1);
+  s9 += buildRow('Social Media Expense', d.expBreakdown.socialMedia, null, 1);
+  s9 += buildRow('Accounting Charges', d.expBreakdown.accounting, null, 1);
+  s9 += buildRow('Professional Charges', d.expBreakdown.professional, null, 1);
+  s9 += buildRow('Office Expense', d.expBreakdown.office, null, 1);
+  s9 += buildRow('Travelling Expense', d.expBreakdown.travelling, null, 1);
+  s9 += buildRow('Telephone Charges', d.expBreakdown.telephone, null, 1);
+  s9 += buildRow('Software Charges', d.expBreakdown.software, null, 1);
+  s9 += buildRow('Other Expense', d.expBreakdown.otherExp, null, 1);
+  s9 += buildRow('Staff Welfare Expenses', d.expBreakdown.staffWelfare, null, 1);
+
+  const totalRows = rowCounter;
+
+  document.getElementById('sections').innerHTML = `
+    ${sectionWrap('geninfo', 'Segment I — General Information', 'Static / Reference', s1)}
+    ${sectionWrap('bsliab', 'Balance Sheet — Equity & Liabilities', 'Part I, Pg 6', s2)}
+    ${sectionWrap('bsasset', 'Balance Sheet — Assets', 'Part I, Pg 7', s3)}
+    ${sectionWrap('pl-income', 'P&L — Revenue & Income', 'Segment II, Pg 14–15', s4)}
+    ${sectionWrap('pl-exp', 'P&L — Expenses', 'Segment II, Pg 15', s5)}
+    ${sectionWrap('pl-profit', 'P&L — Profit / Loss & EPS', 'Segment II, Pg 15–16', s6)}
+    ${sectionWrap('finparams', 'Financial Parameters (Balance Sheet)', 'Segment I, Pg 12', s7)}
+    ${sectionWrap('sharecap', 'Share Capital Details', 'Segment I, Pg 12', s8)}
+    ${sectionWrap('notes', 'Notes & Detailed Breakdowns', 'Reference / Notes', s9)}
+  `;
+
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('progressSummary').innerHTML = `<span>${totalRows}</span> fields mapped`;
+  applyFilter();
+}
+</script>
+</body>
+</html>
